@@ -1,0 +1,18 @@
+# Build
+build/
+DerivedData/
+*.o
+
+# Xcode
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+xcuserdata/
+
+# macOS
+.DS_Store
+*.pyc
+__pycache__/
+
+# Temporary
+*.tmp
+*.temp
