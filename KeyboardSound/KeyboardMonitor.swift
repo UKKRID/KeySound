@@ -1,5 +1,5 @@
 import Cocoa
-import AudioToolbox
+import AVFoundation
 
 class KeyboardMonitor {
     private var eventTap: CFMachPort?
@@ -7,7 +7,8 @@ class KeyboardMonitor {
     private(set) var isEnabled = false
 
     private(set) var currentSoundType: SoundType = .glass
-    private var soundID: SystemSoundID = 0
+    private var playerPools: [String: [AVAudioPlayer]] = [:]
+    private var playerIndices: [String: Int] = [:]
 
     enum SoundType: String, CaseIterable {
         case glass = "Glass"
@@ -20,9 +21,19 @@ class KeyboardMonitor {
         case hero = "Hero"
     }
 
-    var volume: Float = 0.5
+    var volume: Float = 0.5 {
+        didSet {
+            for (_, players) in playerPools {
+                for player in players {
+                    player.volume = volume
+                }
+            }
+        }
+    }
+
     private var lastPlayTime: UInt64 = 0
     private var timeBase: UInt32 = 1
+    private let poolSize = 8
 
     init() {
         var info = mach_timebase_info_data_t()
@@ -35,11 +46,12 @@ class KeyboardMonitor {
         }
         let savedVol = UserDefaults.standard.float(forKey: "soundVolume")
         volume = savedVol > 0 ? savedVol : 0.5
+
+        preloadAllSounds()
     }
 
     func start() {
         guard !isEnabled else { return }
-        loadSound(currentSoundType)
 
         guard let eventTap = createEventTap() else {
             showAccessibilityAlert()
@@ -63,10 +75,12 @@ class KeyboardMonitor {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         }
 
-        if soundID != 0 {
-            AudioServicesDisposeSystemSoundID(soundID)
-            soundID = 0
+        for (_, players) in playerPools {
+            for player in players {
+                player.stop()
+            }
         }
+
         eventTap = nil
         runLoopSource = nil
         isEnabled = false
@@ -79,43 +93,64 @@ class KeyboardMonitor {
     func changeSound(to type: SoundType) {
         currentSoundType = type
         UserDefaults.standard.set(type.rawValue, forKey: "selectedSound")
-        loadSound(type)
+        if playerPools[type.rawValue] == nil {
+            preloadSound(type)
+        }
     }
 
     func testSound() {
         playSound()
     }
 
-    private func loadSound(_ type: SoundType) {
-        if soundID != 0 {
-            AudioServicesDisposeSystemSoundID(soundID)
-            soundID = 0
+    // MARK: - Preload
+
+    private func preloadAllSounds() {
+        for type in SoundType.allCases {
+            preloadSound(type)
         }
+    }
+
+    private func preloadSound(_ type: SoundType) {
+        guard playerPools[type.rawValue] == nil else { return }
 
         let path = "/System/Library/Sounds/\(type.rawValue).aiff"
-        guard FileManager.default.fileExists(atPath: path) else {
-            print("[KeySound] Sound file not found: \(path)")
-            return
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        let url = URL(fileURLWithPath: path)
+
+        var players: [AVAudioPlayer] = []
+        for _ in 0..<poolSize {
+            if let player = try? AVAudioPlayer(contentsOf: url) {
+                player.volume = volume
+                player.prepareToPlay()
+                players.append(player)
+            }
         }
 
-        let url = URL(fileURLWithPath: path) as CFURL
-        let status = AudioServicesCreateSystemSoundID(url, &soundID)
-        if status != noErr {
-            print("[KeySound] Failed to load sound: \(status)")
-        }
+        playerPools[type.rawValue] = players
+        playerIndices[type.rawValue] = 0
     }
+
+    // MARK: - Play
 
     private func playSound() {
-        guard soundID != 0 else { return }
-
         let now = mach_absolute_time()
         let elapsed = (now - lastPlayTime) * UInt64(timeBase)
-        let minNs: UInt64 = 2_000_000
-        guard elapsed >= minNs else { return }
+        guard elapsed >= 2_000_000 else { return }
         lastPlayTime = now
 
-        AudioServicesPlaySystemSound(soundID)
+        guard let players = playerPools[currentSoundType.rawValue], !players.isEmpty else { return }
+
+        let idx = playerIndices[currentSoundType.rawValue] ?? 0
+        let player = players[idx % players.count]
+        playerIndices[currentSoundType.rawValue] = idx + 1
+
+        player.stop()
+        player.currentTime = 0
+        player.volume = volume
+        player.play()
     }
+
+    // MARK: - Event Tap
 
     private func createEventTap() -> CFMachPort? {
         let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
