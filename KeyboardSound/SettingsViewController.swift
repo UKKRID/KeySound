@@ -27,7 +27,11 @@ class SettingsViewController: NSViewController {
 
         // Icon
         let iconView = NSImageView(frame: NSRect(x: 170, y: 305, width: 80, height: 80))
-        iconView.image = NSApp.applicationIconImage
+        if let icon = NSImage(named: "AppIcon") {
+            iconView.image = icon
+        } else {
+            iconView.image = NSApp.applicationIconImage
+        }
         contentView.addSubview(iconView)
 
         // Title

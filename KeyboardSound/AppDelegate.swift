@@ -17,10 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         buildMenu()
         keyboardMonitor?.start()
         updateMenu()
-
-        if UserDefaults.standard.string(forKey: "selectedSound") == nil {
-            openSettings()
-        }
+        openSettings()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
