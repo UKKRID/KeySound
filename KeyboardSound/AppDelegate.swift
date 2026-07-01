@@ -7,6 +7,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsVC: SettingsViewController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem?.button {
