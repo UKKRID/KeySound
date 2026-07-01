@@ -64,6 +64,9 @@ sync
 # Unmount
 hdiutil detach "${MOUNT_POINT}" -quiet
 
+# Remove quarantine from DMG contents
+xattr -cr "${FINAL_DMG}" 2>/dev/null || true
+
 # Convert to compressed read-only
 hdiutil convert "${TEMP_DMG}" -format UDZO -imagekey zlib-level=9 -o "${FINAL_DMG}" -quiet
 

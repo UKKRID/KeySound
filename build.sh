@@ -25,4 +25,7 @@ swiftc \
 cp KeyboardSound/Info.plist "${APP_DIR}/Contents/Info.plist"
 echo -n "APPL????" > "${APP_DIR}/Contents/PkgInfo"
 
+# Remove quarantine
+xattr -cr "${APP_DIR}" 2>/dev/null || true
+
 echo "Build complete: ${APP_DIR}"
